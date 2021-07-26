@@ -26,14 +26,14 @@ var (
 
 	logstashEndpoint    string
 	exporterBindAddress string
-	logstashName        string
+	logstashUsage       string
 	isDebug             bool
 )
 
 func init() {
 	flag.StringVarP(&logstashEndpoint, "logstash_endpoint", "l", "http://localhost:9600", "logstash metric endpoint")
 	flag.StringVarP(&exporterBindAddress, "web_listen_address", "w", ":9198", "http server for /metric and more")
-	flag.StringVarP(&logstashName, "logstash_name", "n", "logstash", "logstash name is the Processing object name, for instance: sms")
+	flag.StringVarP(&logstashUsage, "logstash_usage", "u", "logstash", "logstash_usage, for instance: sms, to cope with sms message")
 	flag.BoolVar(&isDebug, "debug", false, "Output verbose debug information")
 }
 
@@ -73,12 +73,12 @@ func main() {
 	registry := prometheus.NewRegistry()
 
 	exp, err := exporter.NewLogstashExporter(exporter.Options{
-		Namespace:    NameSpace,
-		LogstashName: logstashName,
-		Hostname:     instanceHostName,
-		EndPoint:     logstashEndpoint,
-		MetricsPath:  MetricsPath,
-		Registry:     registry,
+		Namespace:     NameSpace,
+		LogstashUsage: logstashUsage,
+		Hostname:      instanceHostName,
+		EndPoint:      logstashEndpoint,
+		MetricsPath:   MetricsPath,
+		Registry:      registry,
 		BuildInfo: exporter.BuildInfo{
 			Version:   BuildVersion,
 			CommitSha: BuildCommitSha,

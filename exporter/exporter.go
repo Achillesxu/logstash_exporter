@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+const RootPath = "/"
+
 type BuildInfo struct {
 	Version   string
 	CommitSha string
@@ -20,13 +22,17 @@ type BuildInfo struct {
 }
 
 type Options struct {
-	Namespace    string
-	EndPoint     string
-	LogstashName string
-	Hostname     string
-	MetricsPath  string
-	Registry     *prometheus.Registry
-	BuildInfo    BuildInfo
+	Namespace     string
+	EndPoint      string
+	LogstashUsage string
+	Hostname      string
+	MetricsPath   string
+	Registry      *prometheus.Registry
+	BuildInfo     BuildInfo
+}
+
+type Collector interface {
+	Collect(ch chan<- prometheus.Metric)
 }
 
 // LogstashExporter implements the prometheus.Exporter interface, and exports Logstash metrics.
@@ -36,10 +42,12 @@ type LogstashExporter struct {
 	namespace string
 	endpoint  string
 
-	totalScrapes   prometheus.Counter
-	scrapeDuration prometheus.Summary
+	totalScrapes   *prometheus.CounterVec
+	scrapeDuration *prometheus.SummaryVec
+	logstashUp     *prometheus.GaugeVec
 
-	metricDescriptions map[string]*prometheus.Desc
+	reqClient  *ReqClient
+	collectors []Collector
 
 	options   Options
 	mux       *http.ServeMux
@@ -51,37 +59,31 @@ func NewLogstashExporter(opts Options) (*LogstashExporter, error) {
 	e := &LogstashExporter{
 		namespace: opts.Namespace,
 		endpoint:  opts.EndPoint,
-		totalScrapes: prometheus.NewCounter(prometheus.CounterOpts{
+		totalScrapes: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: opts.Namespace,
 			Name:      "exporter_scrapes_total",
 			Help:      "Current total logstash scrapes.",
-			ConstLabels: map[string]string{
-				"hostname":      opts.Hostname,
-				"logstash_name": opts.LogstashName,
-			},
-		}),
-		scrapeDuration: prometheus.NewSummary(prometheus.SummaryOpts{
+		}, []string{"hostname", "logstash_usage"}),
+		scrapeDuration: prometheus.NewSummaryVec(prometheus.SummaryOpts{
 			Namespace: opts.Namespace,
 			Name:      "exporter_scrape_duration_seconds",
 			Help:      "Durations of scrapes by the exporter",
-			ConstLabels: map[string]string{
-				"hostname":      opts.Hostname,
-				"logstash_name": opts.LogstashName,
-			},
-		}),
+		}, []string{"hostname", "logstash_usage"}),
+		logstashUp: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: opts.Namespace,
+			Name:      "up",
+			Help:      "Information about the Logstash instance",
+		}, []string{"hostname", "logstash_usage", "version"}),
 
 		options:   opts,
 		buildInfo: opts.BuildInfo,
 	}
-	e.metricDescriptions = map[string]*prometheus.Desc{}
-	for k, desc := range map[string]struct {
-		txt    string
-		labels []string
-	}{
-		"up": {txt: "Information about the Redis instance", labels: []string{"hostname", "logstash_name"}},
-	} {
-		e.metricDescriptions[k] = newMetricDesc(opts.Namespace, k, desc.txt, desc.labels)
-	}
+
+	e.reqClient = NewReqClient(opts.EndPoint)
+
+	nodeStatCollector, _ := NewNodeStatsCollector(e)
+
+	e.collectors = append(e.collectors, nodeStatCollector)
 
 	e.mux = http.NewServeMux()
 
@@ -100,36 +102,34 @@ func NewLogstashExporter(opts Options) (*LogstashExporter, error) {
 
 // Describe outputs Redis metric descriptions.
 func (e *LogstashExporter) Describe(ch chan<- *prometheus.Desc) {
-	for _, desc := range e.metricDescriptions {
-		ch <- desc
-	}
-	//
-	// for _, v := range e.metricMapGauges {
-	// 	ch <- newMetricDescr(e.options.Namespace, v, v+" metric", nil)
-	// }
-	//
-	// for _, v := range e.metricMapCounters {
-	// 	ch <- newMetricDescr(e.options.Namespace, v, v+" metric", nil)
-	// }
-
-	ch <- e.totalScrapes.Desc()
-	ch <- e.scrapeDuration.Desc()
 }
 
 // Collect fetches new metrics from the RedisHost and updates the appropriate metrics.
 func (e *LogstashExporter) Collect(ch chan<- prometheus.Metric) {
 	e.Lock()
 	defer e.Unlock()
-	e.totalScrapes.Inc()
-
+	e.totalScrapes.WithLabelValues(e.options.Hostname, e.options.LogstashUsage).Inc()
 	startTime := time.Now()
-	var up float64
-	up = 1
-	e.registerConstMetricGauge(ch, "up", up, e.options.Hostname, e.options.LogstashName)
+	nrc := NewReqClient(e.endpoint)
 
-	took := time.Since(startTime).Seconds()
-	e.scrapeDuration.Observe(took)
-
-	ch <- e.totalScrapes
-	ch <- e.scrapeDuration
+	rootInfo, err := GetLogstashRootInfo(nrc, RootPath)
+	if err != nil {
+		log.Errorf("request %s%s", e.endpoint, RootPath)
+	} else {
+		e.logstashUp.WithLabelValues(rootInfo.Host, e.options.LogstashUsage, rootInfo.Version).Set(1)
+		wg := sync.WaitGroup{}
+		wg.Add(len(e.collectors))
+		for _, c := range e.collectors {
+			go func(c Collector) {
+				c.Collect(ch)
+				wg.Done()
+			}(c)
+		}
+		wg.Wait()
+		took := time.Since(startTime).Seconds()
+		e.scrapeDuration.WithLabelValues(e.options.Hostname, e.options.LogstashUsage).Observe(took)
+		e.logstashUp.Collect(ch)
+	}
+	e.totalScrapes.Collect(ch)
+	e.scrapeDuration.Collect(ch)
 }
