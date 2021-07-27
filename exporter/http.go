@@ -13,11 +13,11 @@ func (e *LogstashExporter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.mux.ServeHTTP(w, r)
 }
 
-func (e *LogstashExporter) healthHandler(w http.ResponseWriter) {
+func (e *LogstashExporter) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(fmt.Sprintf("%s-%s exporter is running", e.options.Namespace, e.options.LogstashUsage)))
 }
 
-func (e *LogstashExporter) indexHandler(w http.ResponseWriter) {
+func (e *LogstashExporter) indexHandler(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(`<html>
 <head><title>Logstash Exporter ` + e.buildInfo.Version + `</title></head>
 <body>
