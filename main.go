@@ -59,8 +59,8 @@ func main() {
 		log.SetLevel(log.InfoLevel)
 	}
 
-	log.Infof("Logstash Metrics Exporter %s    build date: %s    sha1: %s    Go: %s    GOOS: %s    GOARCH: %s",
-		BuildVersion, BuildDate, BuildCommitSha,
+	log.Infof("Logstash Metrics Exporter version: %s    build date: %s    Go: %s    GOOS: %s    GOARCH: %s",
+		BuildVersion, BuildDate,
 		runtime.Version(),
 		runtime.GOOS,
 		runtime.GOARCH,
