@@ -73,7 +73,7 @@ func NewLogstashExporter(opts Options) (*LogstashExporter, error) {
 			Namespace: opts.Namespace,
 			Name:      "up",
 			Help:      "Information about the Logstash instance",
-		}, []string{"hostname", "logstash_usage", "version"}),
+		}, []string{"hostname", "logstash_usage"}),
 
 		options:   opts,
 		buildInfo: opts.BuildInfo,
@@ -101,7 +101,7 @@ func NewLogstashExporter(opts Options) (*LogstashExporter, error) {
 }
 
 // Describe outputs Redis metric descriptions.
-func (e *LogstashExporter) Describe(ch chan<- *prometheus.Desc) {
+func (e *LogstashExporter) Describe(_ chan<- *prometheus.Desc) {
 }
 
 // Collect fetches new metrics from the RedisHost and updates the appropriate metrics.
@@ -114,9 +114,10 @@ func (e *LogstashExporter) Collect(ch chan<- prometheus.Metric) {
 
 	rootInfo, err := GetLogstashRootInfo(nrc, RootPath)
 	if err != nil {
+		e.logstashUp.WithLabelValues(e.options.Hostname, e.options.LogstashUsage).Set(0)
 		log.Errorf("request %s%s", e.endpoint, RootPath)
 	} else {
-		e.logstashUp.WithLabelValues(rootInfo.Host, e.options.LogstashUsage, rootInfo.Version).Set(1)
+		e.logstashUp.WithLabelValues(rootInfo.Host, e.options.LogstashUsage).Set(1)
 		wg := sync.WaitGroup{}
 		wg.Add(len(e.collectors))
 		for _, c := range e.collectors {
@@ -128,8 +129,8 @@ func (e *LogstashExporter) Collect(ch chan<- prometheus.Metric) {
 		wg.Wait()
 		took := time.Since(startTime).Seconds()
 		e.scrapeDuration.WithLabelValues(e.options.Hostname, e.options.LogstashUsage).Observe(took)
-		e.logstashUp.Collect(ch)
 	}
+	e.logstashUp.Collect(ch)
 	e.totalScrapes.Collect(ch)
 	e.scrapeDuration.Collect(ch)
 }

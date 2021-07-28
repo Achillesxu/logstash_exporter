@@ -14,6 +14,8 @@ type NodeStatsCollector struct {
 	export  *LogstashExporter
 	ReqPath string
 
+	LogstashInfo *prometheus.Desc
+
 	JvmThreadsCount     *prometheus.Desc
 	JvmThreadsPeakCount *prometheus.Desc
 
@@ -51,6 +53,13 @@ func NewNodeStatsCollector(e *LogstashExporter) (*NodeStatsCollector, error) {
 	return &NodeStatsCollector{
 		export:  e,
 		ReqPath: "/_node/stats",
+
+		LogstashInfo: prometheus.NewDesc(
+			prometheus.BuildFQName(e.namespace, "", "instance_info"),
+			"instance_info",
+			[]string{"version", "http_address"},
+			map[string]string{"hostname": e.options.Hostname, "logstash_usage": e.options.LogstashUsage},
+		),
 
 		JvmThreadsCount: prometheus.NewDesc(
 			prometheus.BuildFQName(e.namespace, subsystem, "jvm_threads_count"),
@@ -234,6 +243,13 @@ func (c *NodeStatsCollector) Collect(ch chan<- prometheus.Metric) {
 	if err != nil {
 		log.Fatalf("GetLogstashNodeStats <%s> error: <%#v>", c.ReqPath, err)
 	} else {
+
+		ch <- prometheus.MustNewConstMetric(
+			c.LogstashInfo,
+			prometheus.GaugeValue,
+			float64(1),
+			stats.Version, stats.HTTPAddress)
+
 		ch <- prometheus.MustNewConstMetric(
 			c.JvmThreadsCount,
 			prometheus.GaugeValue,
