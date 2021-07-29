@@ -239,7 +239,7 @@ func NewNodeStatsCollector(e *LogstashExporter) (*NodeStatsCollector, error) {
 }
 
 func (c *NodeStatsCollector) Collect(ch chan<- prometheus.Metric) {
-	stats, err := GetLogstashNodeStats(c.export.reqClient, c.ReqPath)
+	stats, err := GetLogstashNodeStats(c.export.reqClient, c.ReqPath, c.export.options.ScrapeTimeoutMillisecond)
 	if err != nil {
 		log.Fatalf("GetLogstashNodeStats <%s> error: <%#v>", c.ReqPath, err)
 	} else {

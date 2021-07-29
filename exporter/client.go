@@ -6,6 +6,7 @@ package exporter
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/google/go-querystring/query"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type ReqClient struct {
@@ -181,13 +183,13 @@ func NewReqClient(baseUrl string) *ReqClient {
 	}
 }
 
-// Get get a GET Request
+// Get returns a GET request
 func (rc *ReqClient) Get(path string) (*http.Request, error) {
 	return http.NewRequest(http.MethodGet, fmt.Sprintf("%s%s", rc.BaseUrl, path), bytes.NewBuffer([]byte{}))
 }
 
-// GetWith func returns a request
-func (rc *ReqClient) GetWith(path string, params interface{}) (*http.Request, error) {
+// GetQuery returns a GET request with query params
+func (rc *ReqClient) GetQuery(path string, params interface{}) (*http.Request, error) {
 	queryString, err := query.Values(params)
 	if err != nil {
 		err = errors.Wrap(err, fmt.Sprintf("get queryString error"))
@@ -197,7 +199,12 @@ func (rc *ReqClient) GetWith(path string, params interface{}) (*http.Request, er
 }
 
 // Do func returns a response with your data
-func (rc *ReqClient) Do(request *http.Request) (*ResponseStruct, error) {
+func (rc *ReqClient) Do(request *http.Request, duration time.Duration) (*ResponseStruct, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+
+	request = request.WithContext(ctx)
+
 	response, reqErr := rc.hc.Do(request)
 	if reqErr != nil {
 		reqErr = errors.Wrap(reqErr, fmt.Sprintf("%s %s error", request.Method, request.RequestURI))
@@ -226,12 +233,13 @@ func (rc *ReqClient) Do(request *http.Request) (*ResponseStruct, error) {
 	}, nil
 }
 
-func GetLogstashRootInfo(rc *ReqClient, path string) (*NodeRootInfo, error) {
+// GetLogstashRootInfo get Logstash root info
+func GetLogstashRootInfo(rc *ReqClient, path string, milliseconds int64) (*NodeRootInfo, error) {
 	reqGet, err := rc.Get(path)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := rc.Do(reqGet)
+	resp, err := rc.Do(reqGet, time.Duration(milliseconds)*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}
@@ -247,12 +255,12 @@ func GetLogstashRootInfo(rc *ReqClient, path string) (*NodeRootInfo, error) {
 	return &rootInfo, nil
 }
 
-func GetLogstashNodeStats(rc *ReqClient, path string) (*NodeStatsInfo, error) {
+func GetLogstashNodeStats(rc *ReqClient, path string, milliseconds int64) (*NodeStatsInfo, error) {
 	reqGet, err := rc.Get(path)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := rc.Do(reqGet)
+	resp, err := rc.Do(reqGet, time.Duration(milliseconds)*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}

@@ -22,13 +22,14 @@ type BuildInfo struct {
 }
 
 type Options struct {
-	Namespace     string
-	EndPoint      string
-	LogstashUsage string
-	Hostname      string
-	MetricsPath   string
-	Registry      *prometheus.Registry
-	BuildInfo     BuildInfo
+	Namespace                string
+	EndPoint                 string
+	LogstashUsage            string
+	Hostname                 string
+	MetricsPath              string
+	ScrapeTimeoutMillisecond int64
+	Registry                 *prometheus.Registry
+	BuildInfo                BuildInfo
 }
 
 type Collector interface {
@@ -112,7 +113,7 @@ func (e *LogstashExporter) Collect(ch chan<- prometheus.Metric) {
 	startTime := time.Now()
 	nrc := NewReqClient(e.endpoint)
 
-	rootInfo, err := GetLogstashRootInfo(nrc, RootPath)
+	rootInfo, err := GetLogstashRootInfo(nrc, RootPath, e.options.ScrapeTimeoutMillisecond)
 	if err != nil {
 		e.logstashUp.WithLabelValues(e.options.Hostname, e.options.LogstashUsage).Set(0)
 		log.Errorf("request %s%s", e.endpoint, RootPath)

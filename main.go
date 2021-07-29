@@ -28,12 +28,14 @@ var (
 	exporterBindAddress string
 	logstashUsage       string
 	isDebug             bool
+	scrapeTimeout       int64
 )
 
 func init() {
 	flag.StringVarP(&logstashEndpoint, "logstash_endpoint", "l", "http://localhost:9600", "logstash metric endpoint")
 	flag.StringVarP(&exporterBindAddress, "web_listen_address", "w", ":9198", "http server for /metric and more")
 	flag.StringVarP(&logstashUsage, "logstash_usage", "u", "logstash", "logstash_usage, for instance: sms, to cope with sms message")
+	flag.Int64VarP(&scrapeTimeout, "scrape_timeout", "s", 10000, "request single logstash monitor api timeout milliseconds, for instance: -s 10000, the timeout number is 10000 millisecond")
 	flag.BoolVar(&isDebug, "debug", false, "Output verbose debug information")
 }
 
@@ -73,12 +75,13 @@ func main() {
 	registry := prometheus.NewRegistry()
 
 	exp, err := exporter.NewLogstashExporter(exporter.Options{
-		Namespace:     NameSpace,
-		LogstashUsage: logstashUsage,
-		Hostname:      instanceHostName,
-		EndPoint:      logstashEndpoint,
-		MetricsPath:   MetricsPath,
-		Registry:      registry,
+		Namespace:                NameSpace,
+		LogstashUsage:            logstashUsage,
+		Hostname:                 instanceHostName,
+		EndPoint:                 logstashEndpoint,
+		MetricsPath:              MetricsPath,
+		ScrapeTimeoutMillisecond: scrapeTimeout,
+		Registry:                 registry,
 		BuildInfo: exporter.BuildInfo{
 			Version:   BuildVersion,
 			CommitSha: BuildCommitSha,
